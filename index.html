@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ghost Maze Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="ui">
+            <div>
+                <label for="role-select">Role:</label>
+                <select id="role-select">
+                    <option value="ghost">Ghost</option>
+                    <option value="survivor">Survivor</option>
+                </select>
+            </div>
+            <div id="settings">
+                <label for="speed-range">Ghost Speed:</label>
+                <input type="range" id="speed-range" min="1" max="5" value="2">
+                <span id="speed-value">2</span>
+            </div>
+            <div>
+                <button id="start-button">Start Game</button>
+                <button id="end-button" disabled>End Game</button>
+            </div>
+            <div id="status">
+                <p id="score">Survivors Left: 0</p>
+                <p id="message"></p>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>

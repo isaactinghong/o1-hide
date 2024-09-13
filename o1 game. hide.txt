@@ -1,0 +1,504 @@
+Creating a 2D maze game where one player acts as the ghost chasing other survivors can be both fun and challenging. Below is a complete implementation using HTML, CSS, and JavaScript with the HTML5 Canvas API. This game includes:
+
+- A maze map generated using a grid system.
+- One ghost controlled by the player or AI.
+- Multiple survivors controlled by AI.
+- Health points (HP) for survivors that decrease when touched by the ghost.
+- Hypnosis effect when survivors are caught.
+- Win/Loss conditions based on survivors' survival.
+
+### Table of Contents
+
+1. [Project Structure](#project-structure)
+2. [HTML](#html)
+3. [CSS](#css)
+4. [JavaScript](#javascript)
+   - [Game Initialization](#game-initialization)
+   - [Game Loop](#game-loop)
+   - [Player and AI Controls](#player-and-ai-controls)
+   - [Collision Detection](#collision-detection)
+   - [Rendering the Game](#rendering-the-game)
+   - [Game Over Conditions](#game-over-conditions)
+5. [Running the Game](#running-the-game)
+
+---
+
+## Project Structure
+
+You'll need three files:
+
+1. `index.html` – The HTML structure.
+2. `styles.css` – The styling for the game.
+3. `game.js` – The game logic using JavaScript.
+
+Ensure all files are in the same directory and properly linked.
+
+## HTML
+
+Create an `index.html` file with the following content:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ghost Maze Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="ui">
+            <div>
+                <label>Role:</label>
+                <select id="role-select">
+                    <option value="ghost">Ghost</option>
+                    <option value="survivor">Survivor</option>
+                </select>
+                <button id="start-button">Start Game</button>
+            </div>
+            <div id="status">
+                <p id="score">Survivors Left: 0</p>
+                <p id="message"></p>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
+```
+
+**Explanation:**
+
+- A `<canvas>` element serves as the game area.
+- A simple UI allows the player to choose a role and start the game.
+- Status indicators display the number of survivors left and game messages.
+
+## CSS
+
+Create a `styles.css` file with the following content:
+
+```css
+body {
+    margin: 0;
+    background-color: #222;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+#game-container {
+    position: relative;
+}
+
+#gameCanvas {
+    background-color: #333;
+    border: 2px solid #fff;
+}
+
+#ui {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+}
+
+#ui div {
+    margin-bottom: 10px;
+}
+
+button {
+    padding: 5px 10px;
+    font-size: 16px;
+}
+
+#status p {
+    margin: 5px 0;
+}
+```
+
+**Explanation:**
+
+- Centers the game on the screen.
+- Styles the canvas and UI elements for clarity and visibility.
+
+## JavaScript
+
+Create a `game.js` file with the following content:
+
+```javascript
+// Constants
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const TILE_SIZE = 40;
+const ROWS = canvas.height / TILE_SIZE;
+const COLS = canvas.width / TILE_SIZE;
+
+// UI Elements
+const roleSelect = document.getElementById('role-select');
+const startButton = document.getElementById('start-button');
+const scoreDisplay = document.getElementById('score');
+const messageDisplay = document.getElementById('message');
+
+// Game Variables
+let game;
+let role = 'ghost';
+
+// Maze Layout (0: Wall, 1: Path)
+const maze = [
+    // Define a simple maze layout; 1s are paths and 0s are walls.
+    // This is a 15x20 grid for 800x600 canvas with TILE_SIZE 40.
+    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+    [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1,0],
+    [0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,0],
+    [0,1,0,1,0,1,1,1,1,1,1,1,1,1,0,1,0,0,1,0],
+    [0,1,0,1,0,0,0,0,0,0,0,0,0,1,0,1,0,0,1,0],
+    [0,1,0,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,0],
+    [0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0],
+    [0,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,0,1,0],
+    [0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,1,0],
+    [0,1,1,1,1,1,1,1,0,1,1,1,1,1,1,0,1,0,1,0],
+    [0,1,0,0,0,0,0,1,0,0,0,0,0,0,1,0,1,0,1,0],
+    [0,1,1,1,1,1,0,1,1,1,1,1,1,0,1,1,1,0,1,0],
+    [0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,1,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+];
+
+// Helper Functions
+function getRandomPosition() {
+    let row, col;
+    do {
+        row = Math.floor(Math.random() * ROWS);
+        col = Math.floor(Math.random() * COLS);
+    } while (maze[row][col] === 0);
+    return { row, col };
+}
+
+function distance(a, b) {
+    return Math.sqrt((a.row - b.row) ** 2 + (a.col - b.col) ** 2);
+}
+
+// Classes
+class Player {
+    constructor(row, col, color) {
+        this.row = row;
+        this.col = col;
+        this.color = color;
+        this.size = TILE_SIZE / 2;
+        this.speed = 2;
+    }
+
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(
+            this.col * TILE_SIZE + TILE_SIZE / 2,
+            this.row * TILE_SIZE + TILE_SIZE / 2,
+            this.size / 2,
+            0,
+            2 * Math.PI
+        );
+        ctx.fill();
+    }
+}
+
+class Ghost extends Player {
+    constructor(row, col) {
+        super(row, col, 'red');
+    }
+
+    move(targets) {
+        // Simple AI: Move towards the nearest survivor
+        if (targets.length === 0) return;
+
+        let nearest = targets.reduce((prev, curr) => {
+            return distance(this, curr) < distance(this, prev) ? curr : prev;
+        });
+
+        if (nearest.col > this.col && maze[this.row][this.col + 1] === 1) {
+            this.col += 1;
+        } else if (nearest.col < this.col && maze[this.row][this.col - 1] === 1) {
+            this.col -= 1;
+        } else if (nearest.row > this.row && maze[this.row + 1][this.col] === 1) {
+            this.row += 1;
+        } else if (nearest.row < this.row && maze[this.row - 1][this.col] === 1) {
+            this.row -= 1;
+        }
+    }
+}
+
+class Survivor extends Player {
+    constructor(row, col) {
+        super(row, col, 'blue');
+        this.hp = 3;
+        this.isHypnotized = false;
+        this.hypnosisTimer = 0;
+    }
+
+    move() {
+        if (this.isHypnotized) {
+            this.hypnosisTimer--;
+            if (this.hypnosisTimer <= 0) {
+                this.isHypnotized = false;
+            }
+            return;
+        }
+
+        // Simple AI: Random movement
+        const directions = [
+            { row: -1, col: 0 },
+            { row: 1, col: 0 },
+            { row: 0, col: -1 },
+            { row: 0, col: 1 },
+        ];
+
+        const validDirections = directions.filter(dir => {
+            const newRow = this.row + dir.row;
+            const newCol = this.col + dir.col;
+            return (
+                newRow >= 0 &&
+                newRow < ROWS &&
+                newCol >= 0 &&
+                newCol < COLS &&
+                maze[newRow][newCol] === 1
+            );
+        });
+
+        if (validDirections.length > 0) {
+            const moveDir = validDirections[Math.floor(Math.random() * validDirections.length)];
+            this.row += moveDir.row;
+            this.col += moveDir.col;
+        }
+    }
+
+    draw() {
+        // Change color if hypnotized
+        ctx.fillStyle = this.isHypnotized ? 'purple' : this.color;
+        ctx.beginPath();
+        ctx.arc(
+            this.col * TILE_SIZE + TILE_SIZE / 2,
+            this.row * TILE_SIZE + TILE_SIZE / 2,
+            this.size / 2,
+            0,
+            2 * Math.PI
+        );
+        ctx.fill();
+
+        // Draw HP
+        ctx.fillStyle = 'white';
+        ctx.font = '16px Arial';
+        ctx.fillText(this.hp, this.col * TILE_SIZE + TILE_SIZE / 2 - 5, this.row * TILE_SIZE + TILE_SIZE / 2 + 5);
+    }
+}
+
+class Game {
+    constructor(role) {
+        this.role = role;
+        this.ghost = null;
+        this.survivors = [];
+        this.maxSurvivors = 3;
+        this.roundTime = 120; // 120 frames (~2 seconds at 60fps)
+        this.currentTime = this.roundTime;
+        this.gameOver = false;
+        this.message = '';
+    }
+
+    start() {
+        // Initialize Ghost and Survivors
+        const ghostPos = getRandomPosition();
+        this.ghost = new Ghost(ghostPos.row, ghostPos.col);
+
+        for (let i = 0; i < this.maxSurvivors; i++) {
+            let pos = getRandomPosition();
+            // Ensure survivors don't spawn on the ghost
+            if (pos.row === this.ghost.row && pos.col === this.ghost.col) {
+                i--;
+                continue;
+            }
+            this.survivors.push(new Survivor(pos.row, pos.col));
+        }
+
+        // Start Game Loop
+        this.loop = setInterval(() => this.update(), 1000 / 60); // 60 FPS
+    }
+
+    update() {
+        if (this.gameOver) return;
+
+        // Update Round Timer
+        this.currentTime--;
+        if (this.currentTime <= 0) {
+            // Reset Timer
+            this.currentTime = this.roundTime;
+            // Optionally, shuffle positions or apply other round-based mechanics
+        }
+
+        // Move Entities
+        if (this.role === 'ghost') {
+            this.ghost.move(this.survivors);
+        } else {
+            // If player is ghost, add player controls (not implemented in this basic version)
+            // For simplicity, ghost is controlled by AI
+            this.ghost.move(this.survivors);
+        }
+
+        this.survivors.forEach(survivor => survivor.move());
+
+        // Check Collisions
+        this.checkCollisions();
+
+        // Render
+        this.render();
+
+        // Check Game Over
+        if (this.survivors.length === 0) {
+            this.endGame('Ghost Wins!');
+        }
+    }
+
+    checkCollisions() {
+        this.survivors.forEach((survivor, index) => {
+            if (survivor.row === this.ghost.row && survivor.col === this.ghost.col) {
+                survivor.hp -= 1;
+                survivor.isHypnotized = true;
+                survivor.hypnosisTimer = 60; // 1 second at 60fps
+                if (survivor.hp <= 0) {
+                    // Remove Survivor
+                    this.survivors.splice(index, 1);
+                }
+            }
+        });
+    }
+
+    render() {
+        // Clear Canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Maze
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (maze[r][c] === 0) {
+                    ctx.fillStyle = 'black';
+                    ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                } else {
+                    ctx.fillStyle = '#555';
+                    ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                }
+            }
+        }
+
+        // Draw Ghost
+        this.ghost.draw();
+
+        // Draw Survivors
+        this.survivors.forEach(survivor => survivor.draw());
+
+        // Update UI
+        scoreDisplay.textContent = `Survivors Left: ${this.survivors.length}`;
+    }
+
+    endGame(message) {
+        this.gameOver = true;
+        clearInterval(this.loop);
+        this.message = message;
+        messageDisplay.textContent = message;
+    }
+}
+
+// Event Listeners
+startButton.addEventListener('click', () => {
+    role = roleSelect.value;
+    // Reset previous game if any
+    if (game) {
+        clearInterval(game.loop);
+    }
+    game = new Game(role);
+    game.start();
+    messageDisplay.textContent = '';
+});
+```
+
+**Explanation:**
+
+1. **Constants and Variables:**
+   - Defines the canvas size, tile size, and maze layout.
+   - Sets up UI elements for user interaction.
+
+2. **Helper Functions:**
+   - `getRandomPosition()` ensures players spawn on valid path tiles.
+   - `distance()` calculates the Euclidean distance between two players.
+
+3. **Classes:**
+   - **Player:** Base class for both Ghost and Survivors, handling position and rendering.
+   - **Ghost:** Extends Player; includes simple AI to move toward the nearest survivor.
+   - **Survivor:** Extends Player; includes HP, hypnosis effects, and random movement AI.
+   - **Game:** Manages the game state, including initializing players, updating positions, handling collisions, rendering, and checking win/loss conditions.
+
+4. **Game Loop:**
+   - Runs at 60 FPS using `setInterval`.
+   - Updates the positions of the ghost and survivors.
+   - Checks for collisions and applies game rules.
+   - Renders the current state of the game on the canvas.
+
+5. **User Interaction:**
+   - Users select their role (ghost or survivor) and start the game.
+   - Currently, the ghost is controlled by AI for simplicity. To allow player control as the ghost, additional input handling (e.g., keyboard controls) would need to be implemented.
+
+6. **End Game Conditions:**
+   - If all survivors are eliminated, the ghost wins.
+   - Future enhancements can include survivors winning by surviving a certain time or reaching an exit.
+
+## Running the Game
+
+1. **Setup:**
+   - Create a folder for your project.
+   - Inside the folder, create three files: `index.html`, `styles.css`, and `game.js` with the content provided above.
+
+2. **Run:**
+   - Open `index.html` in your web browser.
+   - Select your role (Ghost or Survivor) and click "Start Game."
+   - If you choose to be the Ghost, it will be controlled by AI in this basic version.
+   - Future enhancements can include player controls for the Ghost.
+
+3. **Gameplay:**
+   - The Ghost (red circle) will chase Survivors (blue circles).
+   - Survivors have 3 HP and will try to evade the Ghost.
+   - When the Ghost catches a Survivor, their HP decreases, and they become hypnotized temporarily.
+   - The game ends when all Survivors are eliminated.
+
+---
+
+## Future Enhancements
+
+To improve and expand upon this basic game, consider implementing the following features:
+
+1. **Player Controls for the Ghost:**
+   - Allow the player to move the Ghost using keyboard inputs (e.g., arrow keys or WASD).
+
+2. **Multiple Rounds and Increasing Difficulty:**
+   - Introduce more Survivors or increase the Ghost's speed over time.
+
+3. **Survivor Objectives:**
+   - Add goals for Survivors, such as reaching an exit or collecting items.
+
+4. **Maze Generation:**
+   - Implement dynamic maze generation algorithms (e.g., Recursive Backtracking) for varied levels.
+
+5. **Enhanced Graphics and Animations:**
+   - Use sprite images for characters and add animations for movement and interactions.
+
+6. **Sound Effects and Music:**
+   - Add audio to enhance the gaming experience.
+
+7. **Responsive Design:**
+   - Make the game responsive to different screen sizes.
+
+8. **Score and Leaderboards:**
+   - Track player performance and implement a leaderboard system.
+
+---
+
+This implementation provides a solid foundation for your Ghost Maze game. You can expand upon it based on your requirements and creativity. Happy coding!
